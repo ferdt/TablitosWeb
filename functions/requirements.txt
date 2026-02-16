@@ -1,0 +1,7 @@
+flask
+flask_cors
+opencv-python-headless
+numpy
+rapidocr_onnxruntime
+firebase-functions
+firebase-admin

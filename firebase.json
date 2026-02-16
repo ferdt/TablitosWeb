@@ -5,7 +5,20 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/ocr",
+        "function": {
+          "functionId": "ocr",
+          "region": "us-central1"
+        }
+      }
     ]
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "python311"
   },
   "remoteconfig": {
     "template": "remoteconfig.template.json"
