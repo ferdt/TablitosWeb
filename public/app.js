@@ -1,22 +1,9 @@
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const btnCamera = document.getElementById('btn-camera');
-const btnCapture = document.getElementById('btn-capture');
+// DOM Elements (Camera removed)
 const fileUploadStandard = document.getElementById('file-upload-standard');
 const fileUploadDebug = document.getElementById('file-upload-debug');
 const statusSection = document.getElementById('status-section');
 const statusText = document.getElementById('status-text');
 const progressFill = document.getElementById('progress-fill');
-
-const resultsSectionStandard = document.getElementById('results-section-standard');
-const resultsSectionDebug = document.getElementById('results-section-debug');
-
-const rawTextOutput = document.getElementById('raw-text');
-const errorMessage = document.getElementById('error-message-debug'); // Used in debug mainly
-const btnResetStd = document.getElementById('btn-reset-std');
-const btnResetDebug = document.getElementById('btn-reset-debug');
-
-let stream = null;
 
 // Queue State
 let processingQueue = [];
@@ -56,10 +43,14 @@ async function processImageWithLocalServer(base64Image) {
     return result;
 }
 
-// Event Listeners
-btnCamera.addEventListener('click', startCamera);
-btnCapture.addEventListener('click', capturePhoto);
+const resultsSectionStandard = document.getElementById('results-section-standard');
+const resultsSectionDebug = document.getElementById('results-section-debug');
+const rawTextOutput = document.getElementById('raw-text');
+const errorMessage = document.getElementById('error-message-debug');
+const btnResetStd = document.getElementById('btn-reset-std');
+const btnResetDebug = document.getElementById('btn-reset-debug');
 
+// Event Listeners (Camera removed - only file upload)
 fileUploadStandard.addEventListener('change', (e) => {
     isDebugMode = false;
     handleFileUpload(e);
@@ -70,77 +61,8 @@ fileUploadDebug.addEventListener('change', (e) => {
     handleFileUpload(e);
 });
 
-
-
 btnResetStd.addEventListener('click', resetApp);
 btnResetDebug.addEventListener('click', resetApp);
-
-// Drag & Drop
-const dropZone = document.querySelector('.video-container');
-
-dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.classList.add('drag-over');
-});
-
-dropZone.addEventListener('dragleave', () => {
-    dropZone.classList.remove('drag-over');
-});
-
-dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
-
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-        if (files.length > 0) {
-            processFiles(files);
-        } else {
-            alert('Por favor, sube archivos de imagen válidos.');
-        }
-    }
-});
-
-async function startCamera() {
-    try {
-        stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment' } // Prefer rear camera on mobile
-        });
-        video.srcObject = stream;
-        btnCamera.style.display = 'none'; // Hide start button
-        btnCapture.disabled = false;
-        btnCapture.classList.remove('btn-secondary');
-        btnCapture.classList.add('btn-primary');
-        errorMessage.classList.add('hidden');
-    } catch (err) {
-        console.error("Error al acceder a la cámara:", err);
-        showError("No se pudo acceder a la cámara. Por favor, asegúrate de dar permisos o usa la opción de subir imagen.");
-    }
-}
-
-function capturePhoto() {
-    if (!stream) return;
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    // Stop camera to save battery/resources
-    stopCamera();
-
-    // Process image as a single item in queue
-    // We treat the canvas dataURL as a "virtual" file content
-    const dataUrl = canvas.toDataURL('image/png');
-
-    // Reset queue state for single capture
-    processingQueue = [dataUrl];
-    totalFilesToProcess = 1;
-    processedFilesCount = 0;
-    allProcessedData = [];
-
-    processQueue();
-}
 
 function handleFileUpload(e) {
     const files = Array.from(e.target.files);
