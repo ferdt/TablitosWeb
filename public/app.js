@@ -181,20 +181,48 @@ async function processSingleImage(imageSrc) {
 }
 
 function detectAndParse(text) {
+    // 1. Try explicit header detection first
+    // We look for 'tiempo' and 'distancia' in the first tokens
+    const tokens = text.replace(/\n/g, ' ').split(/\s+/).map(t => t.toLowerCase().trim());
+    const timeIndex = tokens.findIndex(t => t.includes('tiempo') || t === 'time');
+    const distIndex = tokens.findIndex(t => t.includes('distancia') || t === 'distance' || t === 'dist');
+
+    let explicitMode = null;
+    // Only trust explicit mode if headers are found near the top of the OCR
+    if (timeIndex !== -1 && distIndex !== -1 && timeIndex < 20 && distIndex < 20) {
+        if (timeIndex < distIndex) {
+            explicitMode = 'time_dist';
+            console.log("Auto-detect: Forced 'Tiempo | Distancia' from headers.");
+        } else {
+            explicitMode = 'dist_time';
+            console.log("Auto-detect: Forced 'Distancia | Tiempo' from headers.");
+        }
+    }
+
     // Try both modes
     const dataDistTime = parseTextToData(text, 'dist_time');
     const dataTimeDist = parseTextToData(text, 'time_dist');
 
-    // Heuristic: Choose the one with MORE valid rows
+    // Heuristic: Choose the one with MORE valid rows, or fallback to explicit detection
     let selectedData = [];
     let detectedMode = "";
 
-    if (dataTimeDist.length > dataDistTime.length) {
+    if (explicitMode === 'time_dist') {
         selectedData = dataTimeDist;
         detectedMode = "Tiempo | Distancia";
-    } else {
+    } else if (explicitMode === 'dist_time') {
         selectedData = dataDistTime;
         detectedMode = "Distancia | Tiempo";
+    } else {
+        // Fallback if headers are missing
+        if (dataTimeDist.length > dataDistTime.length) {
+            selectedData = dataTimeDist;
+            detectedMode = "Tiempo | Distancia";
+        } else {
+            selectedData = dataDistTime;
+            detectedMode = "Distancia | Tiempo";
+        }
+        console.log(`Auto-detect: Selected '${detectedMode}' via length heuristic (DT: ${dataDistTime.length}, TD: ${dataTimeDist.length})`);
     }
 
     // Update UI
@@ -213,7 +241,6 @@ function detectAndParse(text) {
         orderDisplayStd.textContent = detectedMode;
     }
 
-    console.log(`Auto-detect: Selected '${detectedMode}' (DT: ${dataDistTime.length}, TD: ${dataTimeDist.length})`);
     return selectedData;
 }
 
