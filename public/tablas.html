@@ -180,6 +180,17 @@
     </main>
 
     <script src="app.js"></script>
+
+    <div id="app-version" style="position: fixed; bottom: 10px; right: 10px; text-align: center; font-size: 0.8rem; color: #64748b;"></div>
+    <script>
+        fetch('version.json')
+            .then(response => response.json())
+            .then(data => {
+                const el = document.getElementById('app-version');
+                if (el) el.innerText = 'v' + data.version;
+            })
+            .catch(error => console.error('Error loading version:', error));
+    </script>
 </body>
 
 </html>
