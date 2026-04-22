@@ -181,49 +181,93 @@ async function processSingleImage(imageSrc) {
 }
 
 function detectAndParse(text) {
-    // 1. Try explicit header detection first
-    // We look for 'tiempo' and 'distancia' in the first tokens
-    const tokens = text.replace(/\n/g, ' ').split(/\s+/).map(t => t.toLowerCase().trim());
-    const timeIndex = tokens.findIndex(t => t.includes('tiempo') || t === 'time');
-    const distIndex = tokens.findIndex(t => t.includes('distancia') || t === 'distance' || t === 'dist');
+    // 1. Tokenize text
+    const tokensRaw = text.replace(/\n/g, ' ').split(/\s+/);
+    const tokens = tokensRaw.filter(t => t.trim() !== "");
+    const tokensLower = tokens.map(t => t.toLowerCase());
+    
+    let timeIndex = -1;
+    let distIndex = -1;
+    
+    // Find first occurrence of headers
+    for (let i = 0; i < tokensLower.length; i++) {
+        const t = tokensLower[i];
+        if (timeIndex === -1 && (t.includes('tiempo') || t === 'time')) timeIndex = i;
+        if (distIndex === -1 && (t.includes('distancia') || t === 'distance' || t === 'dist' || t === 'km')) distIndex = i;
+    }
 
-    let explicitMode = null;
-    // Only trust explicit mode if headers are found near the top of the OCR
-    if (timeIndex !== -1 && distIndex !== -1 && timeIndex < 20 && distIndex < 20) {
+    let scoreTimeDist = 0;
+    let scoreDistTime = 0;
+
+    // Header score: strong signal if found near the beginning
+    if (timeIndex !== -1 && distIndex !== -1 && timeIndex < 30 && distIndex < 30) {
         if (timeIndex < distIndex) {
-            explicitMode = 'time_dist';
-            console.log("Auto-detect: Forced 'Tiempo | Distancia' from headers.");
+            scoreTimeDist += 10;
+            console.log("Auto-detect: Headers suggest 'Tiempo | Distancia'");
         } else {
-            explicitMode = 'dist_time';
-            console.log("Auto-detect: Forced 'Distancia | Tiempo' from headers.");
+            scoreDistTime += 10;
+            console.log("Auto-detect: Headers suggest 'Distancia | Tiempo'");
+        }
+    }
+
+    // 2. Format-based detection (Text format on each column)
+    const distRegex = /^(\d+)(?:[,.]\d{1,3})?$/;
+    const timeRegex = /^(\d{1,2}):(\d{2})(?:[,.](\d{1,2}))?$/;
+    
+    const tokenTypes = [];
+    for (const token of tokens) {
+        if (timeRegex.test(token)) {
+            tokenTypes.push('T');
+        } else if (distRegex.test(token)) {
+            tokenTypes.push('D');
+        }
+    }
+
+    // Score based on transitions/pairs (within-row transitions outnumber cross-row by 1)
+    for (let i = 0; i < tokenTypes.length - 1; i++) {
+        if (tokenTypes[i] === 'D' && tokenTypes[i+1] === 'T') {
+            scoreDistTime += 1;
+        } else if (tokenTypes[i] === 'T' && tokenTypes[i+1] === 'D') {
+            scoreTimeDist += 1;
+        }
+    }
+
+    // Look at the first unambiguous token as an extra hint
+    if (tokenTypes.length > 0) {
+        if (tokenTypes[0] === 'T') {
+            scoreTimeDist += 2;
+        } else if (tokenTypes[0] === 'D') {
+            scoreDistTime += 2;
         }
     }
 
     // Try both modes
     const dataDistTime = parseTextToData(text, 'dist_time');
     const dataTimeDist = parseTextToData(text, 'time_dist');
+    
+    // Evaluate validity of parsed rows (more valid rows is better)
+    scoreDistTime += dataDistTime.length * 0.1;
+    scoreTimeDist += dataTimeDist.length * 0.1;
 
-    // Heuristic: Choose the one with MORE valid rows, or fallback to explicit detection
+    let finalMode = "";
+    if (scoreTimeDist > scoreDistTime) {
+        finalMode = 'time_dist';
+    } else {
+        finalMode = 'dist_time'; // Default if tied or DistTime is greater
+    }
+
     let selectedData = [];
     let detectedMode = "";
 
-    if (explicitMode === 'time_dist') {
+    if (finalMode === 'time_dist') {
         selectedData = dataTimeDist;
         detectedMode = "Tiempo | Distancia";
-    } else if (explicitMode === 'dist_time') {
+    } else {
         selectedData = dataDistTime;
         detectedMode = "Distancia | Tiempo";
-    } else {
-        // Fallback if headers are missing
-        if (dataTimeDist.length > dataDistTime.length) {
-            selectedData = dataTimeDist;
-            detectedMode = "Tiempo | Distancia";
-        } else {
-            selectedData = dataDistTime;
-            detectedMode = "Distancia | Tiempo";
-        }
-        console.log(`Auto-detect: Selected '${detectedMode}' via length heuristic (DT: ${dataDistTime.length}, TD: ${dataTimeDist.length})`);
     }
+
+    console.log(`Auto-detect: Scores (TD: ${scoreTimeDist.toFixed(1)}, DT: ${scoreDistTime.toFixed(1)}). Selected '${detectedMode}'`);
 
     // Update UI
     const orderDisplay = document.getElementById('detected-order');
@@ -437,8 +481,8 @@ function parseTextToData(text, columnMode) {
     // Distance: 0,000 or 1,200 or 10.5 (comma or dot decimal) OR pure integer
     // User Request: "Any value greater or equal of 100 km divide by 1000" handled in post-processing
     const distRegex = /^(\d+)(?:[,.]\d{1,3})?$/;
-    // Time: mm:ss,d or mm:ss.d (e.g. 00:14,4)
-    const timeRegex = /^(\d{1,2}):(\d{2})[,.](\d{1,2})$/;
+    // Time: mm:ss,d or mm:ss.d (e.g. 00:14,4) or mm:ss (e.g. 01:00)
+    const timeRegex = /^(\d{1,2}):(\d{2})(?:[,.](\d{1,2}))?$/;
 
     // Debugging: Log the first few decisions to see what's happening
     let logCount = 0;
@@ -456,7 +500,12 @@ function parseTextToData(text, columnMode) {
             const minutes = parseInt(timeMatch[1], 10);
             const seconds = parseInt(timeMatch[2], 10);
             let decimalPart = timeMatch[3];
-            const decimals = parseFloat("0." + decimalPart);
+            let decimals = 0;
+            if (decimalPart) {
+                decimals = parseFloat("0." + decimalPart);
+            } else {
+                decimalPart = "0"; // fallback for display
+            }
             const totalHours = (minutes / 60) + (seconds / 3600) + (decimals / 3600);
 
             const timeObj = {
