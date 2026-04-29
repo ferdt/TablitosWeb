@@ -350,6 +350,9 @@ function displayResults(data) {
 }
 
 
+// Globals for Sync
+let lastCalculatedChanges = [];
+
 function renderChangesTable(data, tableId) {
     const table = document.getElementById(tableId);
     if (!table) return;
@@ -432,6 +435,8 @@ function renderChangesTable(data, tableId) {
     let prevDistance = data[0].distance; // Start of first segment
     let prevTime = data[0].time;         // Start of first segment time
 
+    const formattedChanges = [];
+
     changes.forEach((item, index) => {
         const tr = document.createElement('tr');
         const timeStr = item.timeDisplay ? item.timeDisplay : item.time.toFixed(4);
@@ -457,6 +462,12 @@ function renderChangesTable(data, tableId) {
         prevDistance = item.distance;
         prevTime = item.time;
 
+        formattedChanges.push({
+            dist_from: distFrom,
+            dist_to: distTo,
+            speed: intervalVelocity
+        });
+
         tr.innerHTML = `
             <td>${distFrom.toFixed(3)}</td>
             <td>${distTo.toFixed(3)}</td>
@@ -465,7 +476,50 @@ function renderChangesTable(data, tableId) {
         `;
         tbody.appendChild(tr);
     });
+
+    // Store for sync
+    lastCalculatedChanges = formattedChanges;
 }
+
+// Sync with Lebrel
+async function sendToLebrel() {
+    if (lastCalculatedChanges.length === 0) {
+        alert("No hay datos de tramo para enviar.");
+        return;
+    }
+
+    // Usar ruta relativa para que funcione en local (Raspberry Pi) sin importar la IP
+    const url = `/api/tramos/import_tablitos`;
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(lastCalculatedChanges)
+        });
+
+        if (response.ok) {
+            const res = await response.json();
+            alert(`✓ Éxito: Se han enviado ${res.count} segmentos al tramo 'Tablas' de Lebrel.`);
+            // Opcional: volver a Lebrel automáticamente tras éxito
+            // window.location.href = "/botonera.html";
+        } else {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+    } catch (err) {
+        console.error("Lebrel Sync Error:", err);
+        alert("Error al conectar con el servidor de Lebrel.");
+    }
+}
+
+// Attach listeners
+document.addEventListener('DOMContentLoaded', () => {
+    const btnSendStd = document.getElementById('btn-send-lebrel-std');
+    const btnSendDebug = document.getElementById('btn-send-lebrel-debug');
+
+    if (btnSendStd) btnSendStd.addEventListener('click', sendToLebrel);
+    if (btnSendDebug) btnSendDebug.addEventListener('click', sendToLebrel);
+});
 
 function parseTextToData(text, columnMode) {
     // 1. Clean and normalize text
