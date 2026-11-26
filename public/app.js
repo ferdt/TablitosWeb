@@ -12,6 +12,49 @@ let totalFilesToProcess = 0;
 let processedFilesCount = 0;
 let isDebugMode = false;
 
+let resolvedOcrUrl = "/ocr";
+
+function isLocalHost(hostname) {
+    return (
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname === "::1" ||
+        hostname === "[::1]" ||
+        hostname.endsWith(".local") ||
+        /^192\.168\.\d+\.\d+$/.test(hostname) ||
+        /^10\.\d+\.\d+\.\d+$/.test(hostname) ||
+        /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(hostname)
+    );
+}
+
+async function fetchOcr(payload) {
+    const requestInit = {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+    };
+
+    const response = await fetch(resolvedOcrUrl, requestInit);
+
+    if (
+        resolvedOcrUrl === "/ocr" &&
+        (response.status === 404 || response.status === 405 || response.status === 501) &&
+        window.location.port !== "8000" &&
+        isLocalHost(window.location.hostname)
+    ) {
+        const fallbackUrl = `${window.location.protocol}//${window.location.hostname}:8000/ocr`;
+        const fallbackResponse = await fetch(fallbackUrl, requestInit);
+        if (fallbackResponse.ok) {
+            resolvedOcrUrl = fallbackUrl;
+        }
+        return fallbackResponse;
+    }
+
+    return response;
+}
+
 // Local PaddleOCR Server logic
 async function processImageWithLocalServer(base64Image) {
     const engineSelect = document.getElementById('ocr-engine');
@@ -23,20 +66,14 @@ async function processImageWithLocalServer(base64Image) {
     // For now, let's allow server defaults.
     const preprocessingOptions = {};
 
-    const response = await fetch("/ocr", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            image: base64Image,
-            ocr_engine: engine,
-            preprocessing: preprocessingOptions
-        })
+    const response = await fetchOcr({
+        image: base64Image,
+        ocr_engine: engine,
+        preprocessing: preprocessingOptions
     });
 
     if (!response.ok) {
-        throw new Error(`Server Error: ${response.statusText}`);
+        throw new Error(`Server Error: ${response.statusText || response.status}`);
     }
 
     const result = await response.json();

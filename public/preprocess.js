@@ -6,6 +6,46 @@ const textResult = document.getElementById('text-result');
 const executionTimeDisplay = document.getElementById('execution-time');
 
 let currentBase64Image = null;
+let resolvedOcrUrl = "/ocr";
+
+function isLocalHost(hostname) {
+    return (
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname === "::1" ||
+        hostname === "[::1]" ||
+        hostname.endsWith(".local") ||
+        /^192\.168\.\d+\.\d+$/.test(hostname) ||
+        /^10\.\d+\.\d+\.\d+$/.test(hostname) ||
+        /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(hostname)
+    );
+}
+
+async function fetchOcr(payload) {
+    const requestInit = {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    };
+
+    const response = await fetch(resolvedOcrUrl, requestInit);
+
+    if (
+        resolvedOcrUrl === "/ocr" &&
+        (response.status === 404 || response.status === 405 || response.status === 501) &&
+        window.location.port !== "8000" &&
+        isLocalHost(window.location.hostname)
+    ) {
+        const fallbackUrl = `${window.location.protocol}//${window.location.hostname}:8000/ocr`;
+        const fallbackResponse = await fetch(fallbackUrl, requestInit);
+        if (fallbackResponse.ok) {
+            resolvedOcrUrl = fallbackUrl;
+        }
+        return fallbackResponse;
+    }
+
+    return response;
+}
 
 // Handle File Upload
 fileUpload.addEventListener('change', (e) => {
@@ -62,19 +102,10 @@ async function runTest() {
             resize_height: parseInt(document.getElementById('opt-resize-height').value) || 1024
         };
 
-        let backendUrl = "/ocr";
-        if (window.location.port !== "8000") {
-            backendUrl = `${window.location.protocol}//${window.location.hostname}:8000/ocr`;
-        }
-
-        const response = await fetch(backendUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                image: currentBase64Image,
-                ocr_engine: 'rapid', // Use rapid for testing prep
-                preprocessing: options
-            })
+        const response = await fetchOcr({
+            image: currentBase64Image,
+            ocr_engine: 'rapid', // Use rapid for testing prep
+            preprocessing: options
         });
 
         if (!response.ok) {
