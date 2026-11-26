@@ -62,7 +62,12 @@ async function runTest() {
             resize_height: parseInt(document.getElementById('opt-resize-height').value) || 1024
         };
 
-        const response = await fetch("/ocr", {
+        let backendUrl = "/ocr";
+        if (window.location.port !== "8000") {
+            backendUrl = `${window.location.protocol}//${window.location.hostname}:8000/ocr`;
+        }
+
+        const response = await fetch(backendUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

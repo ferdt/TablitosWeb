@@ -185,10 +185,10 @@ function detectAndParse(text) {
     const tokensRaw = text.replace(/\n/g, ' ').split(/\s+/);
     const tokens = tokensRaw.filter(t => t.trim() !== "");
     const tokensLower = tokens.map(t => t.toLowerCase());
-    
+
     let timeIndex = -1;
     let distIndex = -1;
-    
+
     // Find first occurrence of headers
     for (let i = 0; i < tokensLower.length; i++) {
         const t = tokensLower[i];
@@ -213,7 +213,7 @@ function detectAndParse(text) {
     // 2. Format-based detection (Text format on each column)
     const distRegex = /^(\d+)(?:[,.]\d{1,3})?$/;
     const timeRegex = /^(\d{1,2}):(\d{2})(?:[,.](\d{1,2}))?$/;
-    
+
     const tokenTypes = [];
     for (const token of tokens) {
         if (timeRegex.test(token)) {
@@ -225,9 +225,9 @@ function detectAndParse(text) {
 
     // Score based on transitions/pairs (within-row transitions outnumber cross-row by 1)
     for (let i = 0; i < tokenTypes.length - 1; i++) {
-        if (tokenTypes[i] === 'D' && tokenTypes[i+1] === 'T') {
+        if (tokenTypes[i] === 'D' && tokenTypes[i + 1] === 'T') {
             scoreDistTime += 1;
-        } else if (tokenTypes[i] === 'T' && tokenTypes[i+1] === 'D') {
+        } else if (tokenTypes[i] === 'T' && tokenTypes[i + 1] === 'D') {
             scoreTimeDist += 1;
         }
     }
@@ -244,7 +244,7 @@ function detectAndParse(text) {
     // Try both modes
     const dataDistTime = parseTextToData(text, 'dist_time');
     const dataTimeDist = parseTextToData(text, 'time_dist');
-    
+
     // Evaluate validity of parsed rows (more valid rows is better)
     scoreDistTime += dataDistTime.length * 0.1;
     scoreTimeDist += dataTimeDist.length * 0.1;
