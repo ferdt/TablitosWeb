@@ -387,6 +387,11 @@ function displayResults(data) {
 }
 
 
+function formatVelocity(velocity) {
+    if (!Number.isFinite(velocity)) return '0';
+    return Number(velocity.toFixed(4)).toString();
+}
+
 function renderChangesTable(data, tableId) {
     const table = document.getElementById(tableId);
     if (!table) return;
@@ -497,7 +502,7 @@ function renderChangesTable(data, tableId) {
         tr.innerHTML = `
             <td>${distFrom.toFixed(3)}</td>
             <td>${distTo.toFixed(3)}</td>
-            <td><strong>${intervalVelocity.toFixed(2)}</strong></td>
+            <td><strong>${formatVelocity(intervalVelocity)}</strong></td>
             <td>${timeStr}</td>
         `;
         tbody.appendChild(tr);
@@ -718,7 +723,7 @@ function renderTable(data, tableId) {
             <td>${item.distance.toFixed(2)}</td>
             <td>${timeStr}</td>
             <td>${diffStr}</td>
-            <td><strong>${item.velocity.toFixed(2)}</strong></td>
+            <td><strong>${formatVelocity(item.velocity)}</strong></td>
         `;
         tbody.appendChild(tr);
     });
